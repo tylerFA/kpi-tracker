@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KPI TRACKER</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Black+Ops+One&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#070709;
+  --surface:rgba(255,255,255,0.04);
+  --border:rgba(255,255,255,0.08);
+  --text:#f5f3ef;
+  --muted:rgba(245,243,239,0.4);
+  --dim:rgba(245,243,239,0.12);
+}
+html,body{width:100%;height:100%;overflow:hidden;}
+body{
+  font-family:'Rajdhani',sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  display:flex;
+  flex-direction:column;
+  height:100vh;
+  position:relative;
+}
+
+/* ANIMATED BACKGROUND */
+#bgCanvas{position:fixed;inset:0;z-index:0;pointer-events:none;}
+
+/* SCANLINES */
+.scanlines{
+  position:fixed;inset:0;z-index:1;pointer-events:none;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.08) 2px,rgba(0,0,0,0.08) 4px);
+}
+
+/* MAIN LAYOUT */
+.app{
+  position:relative;z-index:2;
+  display:flex;flex-direction:column;
+  height:100vh;
+  padding:1.2vh 1.5vw;
+  gap:1vh;
+}
+
+/* HEADER */
+.header{
+  display:flex;justify-content:space-between;align-items:center;
+  padding-bottom:1vh;
+  border-bottom:1px solid var(--border);
+  flex-shrink:0;
+}
+.logo{
+  font-family:'Black Ops One',sans-serif;
+  font-size:clamp(14px,1.8vw,22px);
+  letter-spacing:0.15em;
+  color:var(--text);
+  text-shadow:0 0 20px currentColor;
+}
+.logo span{color:#ff4444;text-shadow:0 0 15px #ff4444;}
+.week-controls{display:flex;align-items:center;gap:0.8vw;}
+.week-label{
+  font-family:'Black Ops One',sans-serif;
+  font-size:clamp(10px,1vw,14px);
+  color:var(--muted);
+  letter-spacing:0.12em;
+  min-width:120px;text-align:center;
+}
+.nav-btn{
+  background:var(--surface);border:1px solid var(--border);
+  color:var(--muted);width:28px;height:28px;border-radius:4px;
+  cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;
+  transition:all 0.15s;
+}
+.nav-btn:hover{color:var(--text);border-color:rgba(255,255,255,0.3);background:rgba(255,255,255,0.08);}
+
+/* MASTER SCORE */
+.master-section{
+  display:flex;align-items:center;gap:2vw;
+  flex-shrink:0;
+  padding:1.2vh 1.5vw;
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:8px;
+  position:relative;overflow:hidden;
+}
+.master-section::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,0.02),transparent);
+  animation:shimmer 3s infinite;
+}
+@keyframes shimmer{0%{transform:translateX(-100%);}100%{transform:translateX(100%);}}
+
+.master-pct{
+  font-family:'Black Ops One',sans-serif;
+  font-size:clamp(40px,6vw,80px);
+  line-height:1;
+  transition:color 0.5s,text-shadow 0.5s;
+  min-width:160px;
+  text-align:center;
+}
+.master-right{flex:1;}
+.master-bar-track{
+  height:12px;background:rgba(255,255,255,0.06);
+  border-radius:99px;overflow:hidden;margin-bottom:8px;
+  border:1px solid rgba(255,255,255,0.06);
+}
+.master-bar-fill{
+  height:100%;border-radius:99px;
+  transition:width 0.6s cubic-bezier(.4,0,.2,1),background 0.5s;
+  position:relative;
+}
+.master-bar-fill::after{
+  content:'';position:absolute;right:0;top:0;bottom:0;width:4px;
+  background:rgba(255,255,255,0.6);border-radius:99px;
+  box-shadow:0 0 8px rgba(255,255,255,0.8);
+  animation:pulse-tip 1.2s ease-in-out infinite;
+}
+@keyframes pulse-tip{0%,100%{opacity:0.6;}50%{opacity:1;}}
+.master-meta{display:flex;justify-content:space-between;align-items:center;}
+.master-hits{font-size:clamp(13px,1.2vw,16px);color:var(--muted);letter-spacing:0.05em;}
+.master-week{font-size:clamp(10px,0.9vw,13px);color:var(--dim);font-family:'Rajdhani',monospace;}
+.streak-row{display:flex;align-items:center;gap:8px;margin-top:6px;}
+.streak-txt{font-size:12px;color:var(--muted);letter-spacing:0.08em;}
+.pip{
+  width:9px;height:9px;border-radius:50%;
+  background:var(--dim);border:1px solid rgba(255,255,255,0.1);
+  transition:all 0.4s cubic-bezier(.34,1.56,.64,1);
+}
+.pip.lit{background:#3ecf8e;border-color:#3ecf8e;box-shadow:0 0 8px #3ecf8e;}
+
+/* KPI GRID */
+.kpi-grid{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:1vw;
+  flex:1;
+  min-height:0;
+}
+
+.kpi-card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:1.5vh 1.2vw;
+  display:flex;flex-direction:column;
+  position:relative;overflow:hidden;
+  cursor:default;
+  transition:border-color 0.4s,box-shadow 0.4s;
+}
+.kpi-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:3px;
+  transition:background 0.5s,box-shadow 0.5s;
+  border-radius:10px 10px 0 0;
+}
+.kpi-glow{
+  position:absolute;inset:0;border-radius:10px;
+  pointer-events:none;opacity:0;transition:opacity 0.5s;
+}
+
+.kpi-name{
+  font-family:'Black Ops One',sans-serif;
+  font-size:clamp(10px,1vw,14px);
+  letter-spacing:0.1em;
+  color:var(--muted);
+  margin-bottom:auto;
+  flex-shrink:0;
+}
+
+.kpi-number-section{
+  display:flex;align-items:baseline;gap:6px;
+  margin:auto 0;
+}
+.kpi-num{
+  font-family:'Black Ops One',sans-serif;
+  font-size:clamp(48px,7vw,96px);
+  line-height:1;
+  transition:color 0.5s,text-shadow 0.5s,transform 0.15s;
+  display:inline-block;
+}
+.kpi-of{
+  font-size:clamp(16px,2vw,24px);
+  color:var(--dim);
+  font-weight:600;
+}
+
+.kpi-bar-track{
+  height:6px;background:rgba(255,255,255,0.05);
+  border-radius:99px;overflow:hidden;margin-bottom:10px;
+  border:1px solid rgba(255,255,255,0.04);
+  flex-shrink:0;
+}
+.kpi-bar-fill{
+  height:100%;border-radius:99px;
+  transition:width 0.5s cubic-bezier(.4,0,.2,1),background 0.5s;
+}
+
+/* SEGMENTED DOTS */
+.kpi-dots{
+  display:flex;gap:4px;margin-bottom:10px;flex-shrink:0;flex-wrap:wrap;
+}
+.dot{
+  height:6px;flex:1;border-radius:3px;
+  background:rgba(255,255,255,0.07);
+  transition:background 0.3s,box-shadow 0.3s,transform 0.2s;
+}
+.dot.filled{transform:scaleY(1.3);}
+
+.kpi-btns{display:flex;gap:6px;flex-shrink:0;}
+.btn-inc{
+  flex:1;border-radius:6px;border:1px solid rgba(255,255,255,0.1);
+  background:rgba(255,255,255,0.05);
+  color:var(--text);font-size:28px;font-family:'Rajdhani',sans-serif;font-weight:400;
+  padding:6px 0;cursor:pointer;
+  transition:transform 0.08s,background 0.15s,border-color 0.2s,box-shadow 0.2s;
+  line-height:1;
+}
+.btn-inc:hover{background:rgba(255,255,255,0.1);box-shadow:0 0 12px rgba(255,255,255,0.1);}
+.btn-inc:active{transform:scale(0.92);}
+.btn-dec{
+  background:none;border:1px solid rgba(255,255,255,0.06);
+  border-radius:6px;color:rgba(255,255,255,0.2);
+  font-size:18px;padding:6px 12px;cursor:pointer;
+  transition:color 0.15s,border-color 0.15s;
+}
+.btn-dec:hover{color:#e05252;border-color:rgba(224,82,82,0.4);}
+
+/* DONE OVERLAY */
+.done-stamp{
+  position:absolute;top:12px;right:12px;
+  font-family:'Black Ops One',sans-serif;
+  font-size:11px;letter-spacing:0.1em;
+  padding:3px 8px;border-radius:4px;
+  opacity:0;transform:scale(0.7) rotate(-5deg);
+  transition:opacity 0.3s,transform 0.3s cubic-bezier(.34,1.56,.64,1);
+  pointer-events:none;
+}
+.kpi-card.done .done-stamp{opacity:1;transform:scale(1) rotate(-3deg);}
+
+/* PARTICLES */
+.particle{position:absolute;border-radius:50%;pointer-events:none;z-index:20;}
+
+/* FULL SCREEN CELEBRATION */
+#celebCanvas{position:fixed;inset:0;z-index:100;pointer-events:none;}
+.celeb-text{
+  position:fixed;inset:0;z-index:101;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  pointer-events:none;opacity:0;transition:opacity 0.5s;
+}
+.celeb-text.show{opacity:1;}
+.celeb-headline{
+  font-family:'Black Ops One',sans-serif;
+  font-size:clamp(36px,6vw,80px);
+  letter-spacing:0.1em;
+  color:#fff;
+  text-shadow:0 0 40px #3ecf8e,0 0 80px rgba(62,207,142,0.4);
+  animation:celebPulse 0.6s ease-in-out infinite alternate;
+  text-align:center;
+}
+@keyframes celebPulse{0%{transform:scale(1);}100%{transform:scale(1.04);}}
+.celeb-sub{
+  font-family:'Rajdhani',sans-serif;font-size:clamp(14px,2vw,22px);
+  color:rgba(62,207,142,0.7);letter-spacing:0.2em;margin-top:12px;
+  text-align:center;
+}
+
+/* POPUP REWARD */
+.reward-pop{
+  position:fixed;
+  font-family:'Black Ops One',sans-serif;
+  font-size:clamp(18px,2.5vw,32px);
+  pointer-events:none;z-index:200;
+  text-shadow:0 0 20px currentColor;
+  animation:rewardFly 0.9s ease-out forwards;
+}
+@keyframes rewardFly{
+  0%{opacity:1;transform:translateY(0) scale(0.8);}
+  60%{opacity:1;transform:translateY(-70px) scale(1.2);}
+  100%{opacity:0;transform:translateY(-120px) scale(0.9);}
+}
+
+/* SCREEN FLASH */
+.screen-flash{
+  position:fixed;inset:0;z-index:300;pointer-events:none;
+  opacity:0;transition:opacity 0.05s;
+}
+
+.reset-btn{
+  background:none;border:none;font-family:'Rajdhani',sans-serif;
+  font-size:11px;color:var(--dim);cursor:pointer;
+  letter-spacing:0.1em;text-transform:uppercase;padding:4px 8px;border-radius:4px;
+  transition:color 0.15s;
+}
+.reset-btn:hover{color:#e05252;}
+
+@keyframes cardBeat{
+  0%{transform:scale(1);}30%{transform:scale(1.03);}60%{transform:scale(0.98);}100%{transform:scale(1);}
+}
+.card-beat{animation:cardBeat 0.35s ease-out;}
+
+@keyframes numberPop{
+  0%{transform:scale(1);}40%{transform:scale(1.4);}70%{transform:scale(0.9);}100%{transform:scale(1);}
+}
+.num-pop{animation:numberPop 0.4s cubic-bezier(.34,1.56,.64,1);}
+.num-mega-pop{animation:numberPop 0.55s cubic-bezier(.34,2,.64,1);}
+</style>
+</head>
+<body>
+
+<canvas id="bgCanvas"></canvas>
+<div class="scanlines"></div>
+<canvas id="celebCanvas"></canvas>
+<div class="celeb-text" id="celebText">
+  <div class="celeb-headline" id="celebHeadline">WEEK CRUSHED</div>
+  <div class="celeb-sub">ALL TARGETS HIT &mdash; YOU'RE BUILT DIFFERENT</div>
+</div>
+<div class="screen-flash" id="screenFlash"></div>
+
+<div class="app">
+  <div class="header">
+    <div class="logo">KPI<span>.</span>TRACKER &mdash; WEST COAST SALES</div>
+    <div class="week-controls">
+      <button class="nav-btn" id="prevWeek">&#8592;</button>
+      <span class="week-label" id="weekLabel">THIS WEEK</span>
+      <button class="nav-btn" id="nextWeek">&#8594;</button>
+      <button class="reset-btn" id="resetBtn">&#8635; RESET</button>
+    </div>
+  </div>
+
+  <div class="master-section" id="masterSection">
+    <div class="master-pct" id="masterPct">0%</div>
+    <div class="master-right">
+      <div class="master-bar-track">
+        <div class="master-bar-fill" id="masterFill" style="width:0%"></div>
+      </div>
+      <div class="master-meta">
+        <span class="master-hits" id="masterHits">0 / 28 HITS</span>
+        <span class="master-week" id="masterWeek"></span>
+      </div>
+      <div class="streak-row">
+        <span class="streak-txt">STREAK</span>
+        <div id="streakPips" style="display:flex;gap:5px;"></div>
+        <span class="streak-txt" id="streakNum">0W</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="kpi-grid" id="kpiGrid"></div>
+</div>
+
+<script>
+const KPIs=[
+  {id:'headhunts',name:'HEADHUNTS',target:10},
+  {id:'pitches',name:'CLIENT PITCHES',target:10},
+  {id:'cvs',name:'CV SENDS',target:5},
+  {id:'interviews',name:'INTERVIEWS SET',target:3},
+];
+const TOTAL=KPIs.reduce((a,k)=>a+k.target,0);
+let offset=0;
+let celebActive=false;
+
+/* ---- COLOR SYSTEM ---- */
+function progressColor(pct){
+  // 0% = deep red, 50% = amber, 100% = vivid green
+  if(pct<=0) return {h:0,s:90,l:45};
+  if(pct>=1) return {h:145,s:75,l:50};
+  if(pct<0.5){
+    const t=pct*2;
+    return {h:t*38,s:90,l:45};
+  } else {
+    const t=(pct-0.5)*2;
+    return {h:38+t*107,s:90-t*15,l:45+t*5};
+  }
+}
+function hslStr(c,alpha){
+  if(alpha!==undefined) return `hsla(${c.h},${c.s}%,${c.l}%,${alpha})`;
+  return `hsl(${c.h},${c.s}%,${c.l}%)`;
+}
+
+/* ---- DATA ---- */
+function mondayOf(off){
+  const d=new Date();const dow=d.getDay();
+  d.setDate(d.getDate()-(dow===0?6:dow-1)+off*7);
+  d.setHours(0,0,0,0);return d;
+}
+function weekKey(off){return 'kpi_'+mondayOf(off).toISOString().slice(0,10);}
+function weekRange(off){
+  const m=mondayOf(off),f=new Date(m);f.setDate(m.getDate()+4);
+  const fmt=d=>d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  return fmt(m)+' – '+fmt(f);
+}
+function weekLabel(off){
+  if(off===0)return'THIS WEEK';if(off===-1)return'LAST WEEK';
+  return mondayOf(off).toISOString().slice(0,10);
+}
+function loadState(off){try{return JSON.parse(localStorage.getItem(weekKey(off)))||{};}catch{return{};}}
+function saveState(off,s){try{localStorage.setItem(weekKey(off),JSON.stringify(s));}catch{}}
+function loadStreaks(){try{return JSON.parse(localStorage.getItem('kpi_streaks'))||[];}catch{return[];}}
+function saveStreaks(s){try{localStorage.setItem('kpi_streaks',JSON.stringify(s));}catch{}}
+function getStreak(){const s=loadStreaks();let c=0,o=-1;while(s.includes(mondayOf(o).toISOString().slice(0,10))){c++;o--;}return c;}
+function allDone(state){return KPIs.every(k=>(state[k.id]||0)>=k.target);}
+
+/* ---- BACKGROUND CANVAS ---- */
+const bgCanvas=document.getElementById('bgCanvas');
+const bgCtx=bgCanvas.getContext('2d');
+let bgW,bgH,bgParticles=[];
+function resizeBg(){bgW=bgCanvas.width=window.innerWidth;bgH=bgCanvas.height=window.innerHeight;initBgParticles();}
+function initBgParticles(){
+  bgParticles=[];
+  for(let i=0;i<60;i++){
+    bgParticles.push({
+      x:Math.random()*bgW,y:Math.random()*bgH,
+      vx:(Math.random()-0.5)*0.3,vy:(Math.random()-0.5)*0.3,
+      size:Math.random()*2+0.5,opacity:Math.random()*0.4+0.1,
+      color:{h:0,s:80,l:50}
+    });
+  }
+}
+let globalPct=0;
+function animateBg(){
+  bgCtx.clearRect(0,0,bgW,bgH);
+  const c=progressColor(globalPct/100);
+  bgParticles.forEach(p=>{
+    p.color=c;
+    p.x+=p.vx;p.y+=p.vy;
+    if(p.x<0)p.x=bgW;if(p.x>bgW)p.x=0;
+    if(p.y<0)p.y=bgH;if(p.y>bgH)p.y=0;
+    bgCtx.beginPath();
+    bgCtx.arc(p.x,p.y,p.size,0,Math.PI*2);
+    bgCtx.fillStyle=hslStr(c,p.opacity*0.5);
+    bgCtx.fill();
+  });
+  // draw connections
+  for(let i=0;i<bgParticles.length;i++){
+    for(let j=i+1;j<bgParticles.length;j++){
+      const dx=bgParticles[i].x-bgParticles[j].x,dy=bgParticles[i].y-bgParticles[j].y;
+      const dist=Math.sqrt(dx*dx+dy*dy);
+      if(dist<120){
+        bgCtx.beginPath();
+        bgCtx.moveTo(bgParticles[i].x,bgParticles[i].y);
+        bgCtx.lineTo(bgParticles[j].x,bgParticles[j].y);
+        bgCtx.strokeStyle=hslStr(c,(1-dist/120)*0.06);
+        bgCtx.lineWidth=0.5;
+        bgCtx.stroke();
+      }
+    }
+  }
+  requestAnimationFrame(animateBg);
+}
+resizeBg();animateBg();
+window.addEventListener('resize',resizeBg);
+
+/* ---- CELEBRATION CANVAS ---- */
+const cCanvas=document.getElementById('celebCanvas');
+const cCtx=cCanvas.getContext('2d');
+let confetti=[];
+let celebRunning=false;
+function resizeCeleb(){cCanvas.width=window.innerWidth;cCanvas.height=window.innerHeight;}
+resizeCeleb();window.addEventListener('resize',resizeCeleb);
+function launchConfetti(){
+  celebRunning=true;
+  for(let i=0;i<200;i++){
+    const colors=['#3ecf8e','#7c6ef5','#f5a623','#ff4444','#fff','#3ecf8e','#3ecf8e'];
+    confetti.push({
+      x:Math.random()*cCanvas.width,y:-20,
+      vx:(Math.random()-0.5)*8,vy:Math.random()*6+3,
+      rot:Math.random()*360,rotV:(Math.random()-0.5)*10,
+      w:6+Math.random()*10,h:4+Math.random()*6,
+      color:colors[Math.floor(Math.random()*colors.length)],
+      life:1,decay:0.005+Math.random()*0.008
+    });
+  }
+  animateConfetti();
+  setTimeout(()=>{celebRunning=false;confetti=[];cCtx.clearRect(0,0,cCanvas.width,cCanvas.height);},5000);
+}
+function animateConfetti(){
+  if(!celebRunning)return;
+  cCtx.clearRect(0,0,cCanvas.width,cCanvas.height);
+  confetti.forEach(c=>{
+    c.x+=c.vx;c.y+=c.vy;c.vy+=0.1;c.rot+=c.rotV;c.life-=c.decay;
+    if(c.life<=0)return;
+    cCtx.save();cCtx.translate(c.x,c.y);cCtx.rotate(c.rot*Math.PI/180);
+    cCtx.globalAlpha=c.life;cCtx.fillStyle=c.color;
+    cCtx.fillRect(-c.w/2,-c.h/2,c.w,c.h);cCtx.restore();
+  });
+  confetti=confetti.filter(c=>c.life>0&&c.y<cCanvas.height+50);
+  requestAnimationFrame(animateConfetti);
+}
+
+/* ---- SCREEN FLASH ---- */
+function doFlash(color){
+  const f=document.getElementById('screenFlash');
+  f.style.background=color;f.style.opacity='1';
+  setTimeout(()=>f.style.opacity='0',80);
+}
+
+/* ---- REWARD POP TEXT ---- */
+const REWARDS=['NAILED IT','ONE MORE','LOCKED IN','LET\'S GO','BEAST','MONEY','CLOSING','HIRED','FIRE','W'];
+function spawnReward(x,y,text,color){
+  const el=document.createElement('div');
+  el.className='reward-pop';
+  el.style.cssText=`left:${x}px;top:${y}px;color:${color};`;
+  el.textContent=text;
+  document.body.appendChild(el);
+  setTimeout(()=>el.remove(),950);
+}
+
+/* ---- CARD PARTICLES ---- */
+function burst(card,c){
+  const rect=card.getBoundingClientRect();
+  const colors=[hslStr(c),hslStr(progressColor(0.8)),'#fff',hslStr(c,0.7)];
+  for(let i=0;i<22;i++){
+    const p=document.createElement('div');
+    p.className='particle';
+    const sz=3+Math.random()*7;
+    const sx=20+Math.random()*60;const sy=20+Math.random()*60;
+    p.style.cssText=`width:${sz}px;height:${sz}px;background:${colors[i%colors.length]};left:${sx}%;top:${sy}%;opacity:1;transition:transform ${0.5+Math.random()*0.35}s ease-out,opacity ${0.45+Math.random()*0.3}s ease-out;`;
+    card.appendChild(p);
+    requestAnimationFrame(()=>{
+      const a=Math.random()*Math.PI*2,d=40+Math.random()*70;
+      p.style.transform=`translate(${Math.cos(a)*d}px,${Math.sin(a)*d}px) scale(0)`;
+      p.style.opacity='0';
+    });
+    setTimeout(()=>p.remove(),950);
+  }
+}
+
+/* ---- RENDER ---- */
+function render(){
+  const state=loadState(offset);
+  const hit=KPIs.reduce((a,k)=>a+Math.min(state[k.id]||0,k.target),0);
+  const pct=Math.round((hit/TOTAL)*100);
+  globalPct=pct;
+  const c=progressColor(pct/100);
+  const colorStr=hslStr(c);
+  const done=allDone(state);
+
+  document.getElementById('weekLabel').textContent=weekLabel(offset);
+  document.getElementById('masterWeek').textContent=weekRange(offset);
+  document.getElementById('masterHits').textContent=hit+' / '+TOTAL+' HITS';
+
+  const pctEl=document.getElementById('masterPct');
+  pctEl.textContent=pct+'%';
+  pctEl.style.color=colorStr;
+  pctEl.style.textShadow=`0 0 30px ${hslStr(c,0.6)},0 0 60px ${hslStr(c,0.2)}`;
+
+  const mf=document.getElementById('masterFill');
+  mf.style.width=pct+'%';
+  mf.style.background=`linear-gradient(90deg,${hslStr(progressColor(0))} 0%,${colorStr} 100%)`;
+  mf.style.boxShadow=`0 0 12px ${hslStr(c,0.7)}`;
+
+  const grid=document.getElementById('kpiGrid');
+  grid.innerHTML='';
+  KPIs.forEach(k=>{
+    const val=state[k.id]||0;
+    const kpct=Math.min(val/k.target,1);
+    const kc=progressColor(kpct);
+    const kcStr=hslStr(kc);
+    const isDone=val>=k.target;
+
+    const card=document.createElement('div');
+    card.id='c_'+k.id;
+    card.className='kpi-card'+(isDone?' done':'');
+
+    // top bar color
+    card.style.setProperty('--card-color',kcStr);
+    card.style.cssText+=`--card-color:${kcStr};`;
+
+    // dynamic border glow
+    if(kpct>0){
+      card.style.borderColor=hslStr(kc,0.25+(kpct*0.4));
+      card.style.boxShadow=`0 0 ${kpct*30}px ${hslStr(kc,kpct*0.15)},inset 0 0 ${kpct*20}px ${hslStr(kc,kpct*0.05)}`;
+    }
+
+    // dots
+    let dotsHTML='<div class="kpi-dots">';
+    for(let i=0;i<k.target;i++){
+      const filled=i<val;
+      const dc=filled?progressColor(i/k.target):{h:0,s:0,l:20};
+      dotsHTML+=`<div class="dot${filled?' filled':''}" style="${filled?`background:${hslStr(dc)};box-shadow:0 0 6px ${hslStr(dc,0.6)};`:''}"></div>`;
+    }
+    dotsHTML+='</div>';
+
+    card.innerHTML=`
+      <div style="position:absolute;top:0;left:0;right:0;height:3px;background:${kcStr};box-shadow:0 0 10px ${kcStr};border-radius:10px 10px 0 0;"></div>
+      <div class="done-stamp" style="background:${hslStr(kc,0.15)};color:${kcStr};border:1px solid ${hslStr(kc,0.4)};">&#10003; DONE</div>
+      <div class="kpi-name">${k.name}</div>
+      <div class="kpi-number-section">
+        <span class="kpi-num" id="n_${k.id}" style="color:${kcStr};text-shadow:0 0 25px ${hslStr(kc,0.5)},0 0 50px ${hslStr(kc,0.15)};">${val}</span>
+        <span class="kpi-of">/ ${k.target}</span>
+      </div>
+      ${dotsHTML}
+      <div class="kpi-bar-track"><div class="kpi-bar-fill" style="width:${Math.round(kpct*100)}%;background:${kcStr};box-shadow:0 0 8px ${hslStr(kc,0.7)};"></div></div>
+      <div class="kpi-btns">
+        <button class="btn-inc" data-id="${k.id}" style="border-color:${hslStr(kc,0.2)};color:${kcStr};">+</button>
+        <button class="btn-dec" data-id="${k.id}">−</button>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+
+  grid.querySelectorAll('.btn-inc').forEach(btn=>{
+    btn.addEventListener('click',e=>{
+      const id=btn.dataset.id;
+      const s=loadState(offset);
+      const prev=s[id]||0;
+      const kpi=KPIs.find(k=>k.id===id);
+      s[id]=prev+1;
+      saveState(offset,s);
+
+      const newVal=s[id];
+      const newPct=Math.min(newVal/kpi.target,1);
+      const nc=progressColor(newPct);
+      const justDone=prev<kpi.target&&newVal>=kpi.target;
+
+      // number animation
+      const numEl=document.getElementById('n_'+id);
+      if(numEl){
+        numEl.classList.remove('num-pop','num-mega-pop');
+        void numEl.offsetWidth;
+        numEl.classList.add(justDone?'num-mega-pop':'num-pop');
+      }
+
+      // card beat
+      const card=document.getElementById('c_'+id);
+      if(card){
+        card.classList.remove('card-beat');void card.offsetWidth;card.classList.add('card-beat');
+        burst(card,nc);
+      }
+
+      // screen flash
+      doFlash(hslStr(nc,justDone?0.25:0.12));
+
+      // reward popup
+      const rect=btn.getBoundingClientRect();
+      const rewardText=justDone?'TARGET HIT!':REWARDS[Math.floor(Math.random()*REWARDS.length)];
+      spawnReward(rect.left+rect.width/2-40,rect.top-10,rewardText,hslStr(nc));
+
+      if(allDone(s)){
+        const st=loadStreaks();
+        const wk=mondayOf(offset).toISOString().slice(0,10);
+        if(!st.includes(wk)){st.push(wk);saveStreaks(st);}
+        if(!celebActive){
+          celebActive=true;
+          document.getElementById('celebText').classList.add('show');
+          launchConfetti();
+          setTimeout(()=>{document.getElementById('celebText').classList.remove('show');celebActive=false;},5000);
+        }
+      }
+
+      render();
+    });
+  });
+
+  grid.querySelectorAll('.btn-dec').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const id=btn.dataset.id;
+      const s=loadState(offset);
+      s[id]=Math.max(0,(s[id]||0)-1);
+      saveState(offset,s);
+      render();
+    });
+  });
+
+  // streak
+  const streak=getStreak();
+  const pips=document.getElementById('streakPips');
+  pips.innerHTML='';
+  for(let i=0;i<8;i++){
+    const p=document.createElement('div');
+    p.className='pip'+(i<streak?' lit':'');
+    pips.appendChild(p);
+  }
+  document.getElementById('streakNum').textContent=streak+'W';
+}
+
+document.getElementById('prevWeek').addEventListener('click',()=>{offset--;render();});
+document.getElementById('nextWeek').addEventListener('click',()=>{offset++;render();});
+document.getElementById('resetBtn').addEventListener('click',()=>{
+  if(confirm('Reset this week?')){try{localStorage.removeItem(weekKey(offset));}catch{}render();}
+});
+
+render();
+</script>
+</body>
+</html>
